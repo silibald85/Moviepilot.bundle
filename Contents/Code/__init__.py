@@ -21,12 +21,9 @@ class MoviepilotAgent(Agent.Movies):
 
 
   def search(self, results, media, lang):
-    try:
-      searchResult = JSON.ObjectFromURL(SEARCH_MOVIES % (String.Quote(media.name, usePlus=True)))
-      if ['total_entries'] == 0:
-        searchResult = None
-    except:
-      Log('Error while retrieving data from the Moviepiot API.')
+    normalizedName = String.StripDiacritics(media.name).lower()
+    searchResult = JSON.ObjectFromURL(SEARCH_MOVIES % (String.Quote(normalizedName, usePlus=True)))
+    if searchResult['total_entries'] == 0:
       searchResult = None
 
     self.parseSearchResult(results, media, lang, searchResult)
@@ -70,14 +67,22 @@ class MoviepilotAgent(Agent.Movies):
         last_name = ''
 
       full_name = ' '.join([first_name, last_name]).strip()
-      role = people['function_restful_url'].rsplit('/',1)[1]
+      role = people['function_restful_url']
+      if role == None:
+        role = ''
+      else:
+        role = people['function_restful_url'].rsplit('/',1)[1]
 
       if role == 'director':
         directors.append(full_name)
       elif role == 'screenplay':
         writers.append(full_name)
       elif role == 'actor':
-        actors.append('|'.join([full_name, people['character']]))
+        if people['character'] == None:
+          character = ''
+        else:
+          character = people['character']
+        actors.append('|'.join([full_name, character]))
 
     metadata.directors.clear()
     directors = list(set(directors)) # Remove duplicates
@@ -114,10 +119,11 @@ class MoviepilotAgent(Agent.Movies):
 
     if searchResult != None:
       for movie in searchResult['movies']:
-        id = movie['restful_url'].rsplit('/',1)[1]
-        title = movie['display_title'].replace('&#38;', '&')
-        year = movie['production_year']
-        finalScore = score - self.scoreResultPenalty(media, year, title)
+        if movie['restful_url'] != None and movie['display_title'] !=None and movie['production_year'] != None:
+          id = movie['restful_url'].rsplit('/',1)[1]
+          title = movie['display_title'].replace('&#38;', '&')
+          year = movie['production_year']
+          finalScore = score - self.scoreResultPenalty(media, year, title)
 
         results.Append(MetadataSearchResult(id=id, name=title, year=year, lang=lang, score=finalScore))
 
@@ -134,7 +140,7 @@ class MoviepilotAgent(Agent.Movies):
       for movie in searchResult['responseData']['results']:
         id = re.search('\/movies\/([^/]+)', movie['unescapedUrl']).group(1)
         title = movie['titleNoFormatting'].split('| Film |',1)[0].strip()
-        year = re.search('\(([0-9]{4})\):', movie['content']).group(1)
+        year = re.search('\(.*([0-9]{4}).*\):', movie['content']).group(1)
         finalScore = score - self.scoreResultPenalty(media, year, title)
 
         results.Append(MetadataSearchResult(id=id, name=title, year=year, lang=lang, score=finalScore))
@@ -154,7 +160,7 @@ class MoviepilotAgent(Agent.Movies):
 
     # Just for log
     for result in results:
-      Log(' ==> ' + result.name + ' | year = ' + str(result.year) + ' | id = ' + result.id + ' | score = ' + str(result.score))
+      Log(' --> ' + result.name + ' | year = ' + str(result.year) + ' | id = ' + result.id + ' | score = ' + str(result.score))
 
 
   def scoreResultPenalty(self, media, year, title):
@@ -172,8 +178,8 @@ class MoviepilotAgent(Agent.Movies):
     title1 = re.sub('[^a-z]+', '', title.lower())      # Title we found on Moviepilot/Google
     title2 = re.sub('[^a-z]+', '', media.name.lower()) # Title from filename/foldername
 
-    Log(title1)
-    Log(title2)
+    #Log(title1)
+    #Log(title2)
 
     # Calculate Levenshtein distance...
     nameDist = Util.LevenshteinDistance(title1, title2)
@@ -185,11 +191,10 @@ class MoviepilotAgent(Agent.Movies):
     if nameDist == 0:
       scorePenalty += -25
 
-    # Give bonus for movies where a 'shorter' title is found within the longer, official title
+    # Bonus for movies where a shorter title is found within the longer (official) title
     # Example:
     # Title found on Moviepilot/Google: Wall-E - Der Letzte räumt die Erde auf
     # Title from filename/foldername:   Wall-E
-
     if title1.find(title2) != -1:
       scorePenalty += -10
 
@@ -205,6 +210,7 @@ class Summary(object):
     name = matchobj.group(1)[2:-2]
 
     if type == 's':
+      full_name = ''
       cast = JSON.ObjectFromURL(CAST_INFO % (self.metadata_id))
       for people in cast['movies_people']:
         if people['person']['restful_url'].find(name) != -1:
@@ -223,6 +229,7 @@ class Summary(object):
           continue
       return full_name
     elif type == 'm':
+      title = ''
       movie = JSON.ObjectFromURL(MOVIE_INFO % (name))
       title = movie['display_title']
       return title
