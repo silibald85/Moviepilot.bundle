@@ -27,16 +27,23 @@ class MoviepilotAgent(Agent.Movies):
 
 
   def search(self, results, media, lang):
-    normalizedName = String.StripDiacritics(media.name).lower()
-    searchResult = JSON.ObjectFromURL(MP_SEARCH_MOVIES % (String.Quote(normalizedName, usePlus=True)))
-    if 'movies' not in searchResult:
-      if 'suggestions' in searchResult:
-        Log(' --> Search suggestions (not used at the moment, as Google finds missing titles):')
-        for s in searchResult['suggestions']:
-          Log(' --> ' + s)
-      searchResult = None
-
+    normalizedTitle = String.StripDiacritics(media.name).lower()
+    searchResult = self.search_moviepilot(normalizedTitle)
     self.parseSearchResult(results, media, lang, searchResult)
+
+
+  def search_moviepilot(self, title):
+    searchResult = JSON.ObjectFromURL(MP_SEARCH_MOVIES % (String.Quote(title.encode('utf-8'), usePlus=True)))
+
+    if 'movies' in searchResult:
+      return searchResult['movies']
+    elif 'suggestions' in searchResult:
+      movies = []
+      for title in searchResult['suggestions']:
+        movies.extend( self.search_moviepilot(title) )
+      return movies
+    else:
+      return None
 
 
   def update(self, metadata, media, lang):
@@ -68,19 +75,18 @@ class MoviepilotAgent(Agent.Movies):
     actors = []
     for people in cast['movies_people']:
       # First or last name *can* be missing
-      first_name = people['person']['first_name']
-      if not first_name:
-        first_name = ''
+      first_name = ''
+      if 'first_name' in people['person'] and people['person']['first_name']:
+        first_name = people['person']['first_name']
 
-      last_name = people['person']['last_name']
-      if not last_name:
-        last_name = ''
+      last_name = ''
+      if 'last_name' in people['person'] and people['person']['last_name']:
+        last_name = people['person']['last_name']
 
       full_name = ' '.join([first_name, last_name]).strip()
-      role = people['function_restful_url']
-      if not role:
-        role = ''
-      else:
+
+      role = ''
+      if 'function_restful_url' in people and people['function_restful_url']:
         role = people['function_restful_url'].rsplit('/',1)[1]
 
       if role == 'director':
@@ -88,9 +94,8 @@ class MoviepilotAgent(Agent.Movies):
       elif role == 'screenplay':
         writers.append(full_name)
       elif role == 'actor':
-        if not people['character']:
-          character = ''
-        else:
+        character = ''
+        if 'character' in people and people['character']:
           character = people['character']
         actors.append('|'.join([full_name, character]))
 
@@ -126,7 +131,7 @@ class MoviepilotAgent(Agent.Movies):
       pass
 
     # Get backdrops and (more) posters from TMDB if we know the IMDB id
-    if movie['alternative_identifiers'] and 'imdb' in movie['alternative_identifiers']:
+    if 'alternative_identifiers' in movie and 'imdb' in movie['alternative_identifiers']:
       imdbId = movie['alternative_identifiers']['imdb']
       imdbId = ''.join(['tt', imdbId.zfill(7)])
       tmdb_dict = JSON.ObjectFromURL(TMDB_GETINFO_IMDB % (imdbId))[0]
@@ -172,14 +177,17 @@ class MoviepilotAgent(Agent.Movies):
     score = 90
 
     if searchResult:
-      for movie in searchResult['movies']:
+      for movie in searchResult:
         if movie['restful_url'] and movie['display_title']:
           id = movie['restful_url'].rsplit('/',1)[1]
           title = movie['display_title'].replace('&#38;', '&')
           year = None
           if movie['production_year'] and str(movie['production_year']).strip() != '':
             year = int(movie['production_year'])
-          finalScore = score - self.scoreResultPenalty(media, year, title)
+          if len(searchResult) == 1:
+            finalScore = score
+          else:
+            finalScore = score - self.scoreResultPenalty(media, year, title)
 
           results.Append(MetadataSearchResult(id=id, name=title, year=year, lang=lang, score=finalScore))
 
@@ -202,7 +210,10 @@ class MoviepilotAgent(Agent.Movies):
             year = re.search('\(.*([0-9]{4}).*\)', movie['content']).group(1)
           except:
             year = None
-          finalScore = score - self.scoreResultPenalty(media, year, title)
+          if len(searchResult['responseData']['results']) == 1:
+            finalScore = score
+          else:
+            finalScore = score - self.scoreResultPenalty(media, year, title)
 
           results.Append(MetadataSearchResult(id=id, name=title, year=year, lang=lang, score=finalScore))
 
@@ -249,8 +260,8 @@ class MoviepilotAgent(Agent.Movies):
 
     # Calculate Levenshtein distance...
     nameDist = Util.LevenshteinDistance(title1, title2)
-    # ...but only give penalies based on this difference to movies where the years don't match
-    if media.year != year:
+    # ...but only give penalies based on this difference to movies where the years don't match and the nameDist isn't too big
+    if media.year != year and nameDist <= 10:
       scorePenalty += nameDist
 
     # Bonus for exact title matches
@@ -262,7 +273,7 @@ class MoviepilotAgent(Agent.Movies):
     # Title found on Moviepilot/Google: Wall-E - Der Letzte räumt die Erde auf
     # Title from filename/foldername:   Wall-E
     if title1.find(title2) != -1:
-      scorePenalty += -10
+      scorePenalty += -25
 
     return scorePenalty
 
@@ -282,13 +293,11 @@ class Summary(object):
         for people in cast['movies_people']:
           if people['person']['restful_url'].find(name) != -1:
             # First or last name *can* be missing
-            first_name = people['person']['first_name']
-            if not first_name:
-              first_name = ''
+            if 'first_name' in people['person'] and people['person']['first_name']:
+              first_name = people['person']['first_name']
 
-            last_name = people['person']['last_name']
-            if not last_name:
-              last_name = ''
+            if 'last_name' in people['person'] and people['person']['last_name']:
+              last_name = people['person']['last_name']
 
             full_name = ' '.join([first_name, last_name]).strip()
             break
