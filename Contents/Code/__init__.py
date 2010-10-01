@@ -137,39 +137,41 @@ class MoviepilotAgent(Agent.Movies):
       tmdb_dict = JSON.ObjectFromURL(TMDB_GETINFO_IMDB % (imdbId))[0]
 
       # Backdrops
-      b_i = 0
-      for b in tmdb_dict['backdrops']:
-        if b['image']['size'] == 'original':
-          b_i += 1
-          if b['image']['url'] not in metadata.art:
-            b_id = b['image']['id']
+      if 'backdrops' in tmdb_dict:
+        b_i = 0
+        for b in tmdb_dict['backdrops']:
+          if b['image']['size'] == 'original':
+            b_i += 1
+            if b['image']['url'] not in metadata.art:
+              b_id = b['image']['id']
 
-            # Find a thumbnail
-            for t in tmdb_dict['backdrops']:
-              if t['image']['id'] == b_id and t['image']['size'] == 'poster':
-                thumb = HTTP.Request(t['image']['url'], cacheTime=CACHE_1WEEK)
-                break
-            try:
-              metadata.art[b['image']['url']] = Proxy.Preview(thumb, sort_order = b_i)
-            except:
-              pass
+              # Find a thumbnail
+              for t in tmdb_dict['backdrops']:
+                if t['image']['id'] == b_id and t['image']['size'] == 'poster':
+                  thumb = HTTP.Request(t['image']['url'], cacheTime=CACHE_1WEEK)
+                  break
+              try:
+                metadata.art[b['image']['url']] = Proxy.Preview(thumb, sort_order = b_i)
+              except:
+                pass
 
       # Posters
-      for p in tmdb_dict['posters']:
-        if p['image']['size'] == 'original':
-          p_i += 1 # Variable p_i already initiated when trying to retrieve poster from Moviepilot
-          if p['image']['url'] not in metadata.posters:
-            p_id = p['image']['id']
+      if 'posters' in tmdb_dict:
+        for p in tmdb_dict['posters']:
+          if p['image']['size'] == 'original':
+            p_i += 1 # Variable p_i already initiated when trying to retrieve poster from Moviepilot
+            if p['image']['url'] not in metadata.posters:
+              p_id = p['image']['id']
 
-            # Find a thumbnail
-            for t in tmdb_dict['posters']:
-              if t['image']['id'] == p_id and t['image']['size'] == 'mid':
-                thumb = HTTP.Request(t['image']['url'], cacheTime=CACHE_1WEEK)
-                break
-            try:
-              metadata.posters[p['image']['url']] = Proxy.Preview(thumb, sort_order = p_i)
-            except:
-              pass
+              # Find a thumbnail
+              for t in tmdb_dict['posters']:
+                if t['image']['id'] == p_id and t['image']['size'] == 'mid':
+                  thumb = HTTP.Request(t['image']['url'], cacheTime=CACHE_1WEEK)
+                  break
+              try:
+                metadata.posters[p['image']['url']] = Proxy.Preview(thumb, sort_order = p_i)
+              except:
+                pass
 
 
   def parseSearchResult(self, results, media, lang, searchResult):
