@@ -56,6 +56,7 @@ class MoviepilotAgent(Agent.Movies):
     summary = Summary(metadata.id) # Create an instance of the callable class Summary and make the metadata.id available in it
     metadata.summary = re.sub('\[\[(.+?)\]\]', summary, movie['short_description']) # Replace linked movie titles and names with full title or name
     metadata.summary = String.StripTags(metadata.summary) # Strip HTML tags
+    metadata.summary = metadata.summary.replace('&amp;', '&').replace('&#8220;', '“').replace('&#8221;', '”')
     metadata.summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', metadata.summary) # Strip asterisks from movie titles
     metadata.summary = re.sub('(\r)?\n((\r)?\n)+', '\n\n', metadata.summary).strip() # Replace 2+ newlines with 2 newlines
 
