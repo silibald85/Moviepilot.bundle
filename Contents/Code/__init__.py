@@ -59,6 +59,8 @@ class MoviepilotAgent(Agent.Movies):
     metadata.summary = metadata.summary.replace('&amp;', '&').replace('&#8220;', '“').replace('&#8221;', '”')
     metadata.summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', metadata.summary) # Strip asterisks from movie titles
     metadata.summary = re.sub('(\r)?\n((\r)?\n)+', '\n\n', metadata.summary).strip() # Replace 2+ newlines with 2 newlines
+    if metadata.summary.find('\n\nHandlung') != -1:
+      metadata.summary = metadata.summary.split('\n\nHandlung')[0].strip()
 
     metadata.rating = float( movie['average_community_rating'] )/10 # Convert score of 0-100 to 0-10
     if movie['runtime']:
