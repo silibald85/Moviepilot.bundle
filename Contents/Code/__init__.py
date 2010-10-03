@@ -49,7 +49,7 @@ class MoviepilotAgent(Agent.Movies):
   def update(self, metadata, media, lang):
     movie = JSON.ObjectFromURL(MP_MOVIE_INFO % (metadata.id))
 
-    metadata.title = movie['display_title'].replace('&#38;', '&').replace('&#39;', '’').replace('&amp;', '&')
+    metadata.title = movie['display_title'].replace('&#38;', '&').replace('&amp;', '&').replace('&#39;', '’')
     if movie['production_year'] and str(movie['production_year']).strip() != '':
       metadata.year = int(movie['production_year'])
 
