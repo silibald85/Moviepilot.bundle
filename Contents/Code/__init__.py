@@ -1,7 +1,7 @@
 # Moviepilot metadata agent for Plex
 # Adds German titles, summaries and posters from www.moviepilot.de to movies
 
-import datetime, re, time
+import datetime, htmlentitydefs, re, time
 
 # Moviepilot
 MP_BASE_URL = 'http://www.moviepilot.de'
@@ -20,6 +20,48 @@ GOOGLE_JSON_URL = 'http://ajax.googleapis.com/ajax/services/search/web?v=1.0&rsz
 def Start():
   HTTP.CacheTime = CACHE_1DAY
   HTTP.Headers['User-agent'] = 'Plex/Nine'
+
+##
+# Removes HTML or XML character references and entities from a text string.
+# http://effbot.org/zone/re-sub.htm#unescape-html
+#
+# @param text The HTML (or XML) source text.
+# @return The plain text, as a Unicode string, if necessary.
+
+def unescape(text):
+  def fixup(m):
+    text = m.group(0)
+    if text[:2] == "&#":
+      # character reference
+      try:
+        if text[:3] == "&#x":
+          return unichr(int(text[3:-1], 16))
+        else:
+          return unichr(int(text[2:-1]))
+      except ValueError:
+        pass
+    else:
+      # named entity
+      try:
+        text = unichr(htmlentitydefs.name2codepoint[text[1:-1]])
+      except KeyError:
+        pass
+    return text # leave as is
+  return re.sub("&#?\w+;", fixup, text)
+
+
+def get_full_name(people):
+  # First or last name item can be empty or missing
+  first_name = ''
+  if 'first_name' in people['person'] and people['person']['first_name']:
+    first_name = people['person']['first_name']
+
+  last_name = ''
+  if 'last_name' in people['person'] and people['person']['last_name']:
+    last_name = people['person']['last_name']
+
+  return ' '.join([first_name, last_name]).strip()
+
 
 class MoviepilotAgent(Agent.Movies):
   name = 'Moviepilot'
@@ -49,18 +91,25 @@ class MoviepilotAgent(Agent.Movies):
   def update(self, metadata, media, lang):
     movie = JSON.ObjectFromURL(MP_MOVIE_INFO % (metadata.id))
 
-    metadata.title = movie['display_title'].replace('&#38;', '&').replace('&amp;', '&').replace('&#39;', '’')
+    title = movie['display_title'].replace('&#38;', '&').replace('&amp;', '&')
+    metadata.title = unescape(title)
+
     if movie['production_year'] and str(movie['production_year']).strip() != '':
       metadata.year = int(movie['production_year'])
 
-    summary = Summary(metadata.id) # Create an instance of the callable class Summary and make the metadata.id available in it
-    metadata.summary = re.sub('\[\[(.+?)\]\]', summary, movie['short_description']) # Replace linked movie titles and names with full title or name
-    metadata.summary = String.StripTags(metadata.summary) # Strip HTML tags
-    metadata.summary = metadata.summary.replace('&amp;', '&').replace('&#8220;', '“').replace('&#8221;', '”')
-    metadata.summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', metadata.summary) # Strip asterisks from movie titles
-    metadata.summary = re.sub('(\r)?\n((\r)?\n)+', '\n\n', metadata.summary).strip() # Replace 2+ newlines with 2 newlines
-    if metadata.summary.find('\n\nHandlung') != -1:
-      metadata.summary = metadata.summary.split('\n\nHandlung')[0].strip()
+    summary_obj = Summary(metadata.id) # Create an instance of the callable class Summary and make the metadata.id available in it
+
+    summary = re.sub('\[\[(.+?)\]\]', summary_obj, movie['short_description']) # Replace linked movie titles and names with full title or name
+    summary = summary.replace('&#38;', '&').replace('&amp;', '&')
+    summary = unescape(summary)
+    summary = String.StripTags(summary) # Strip HTML tags
+    summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', summary) # Strip asterisks from movie titles
+    summary = re.sub('(\r)?\n((\r)?\n)+', '\n\n', summary).strip() # Replace 2+ newlines with 2 newlines
+
+    if summary.find('\n\nHandlung') != -1:
+      summary = summary.split('\n\nHandlung')[0].strip()
+
+    metadata.summary = summary
 
     metadata.rating = float( movie['average_community_rating'] )/10 # Convert score of 0-100 to 0-10
     if movie['runtime']:
@@ -77,16 +126,7 @@ class MoviepilotAgent(Agent.Movies):
     writers = []
     actors = []
     for people in cast['movies_people']:
-      # First or last name *can* be missing
-      first_name = ''
-      if 'first_name' in people['person'] and people['person']['first_name']:
-        first_name = people['person']['first_name']
-
-      last_name = ''
-      if 'last_name' in people['person'] and people['person']['last_name']:
-        last_name = people['person']['last_name']
-
-      full_name = ' '.join([first_name, last_name]).strip()
+      full_name = get_full_name(people)
 
       role = ''
       if 'function_restful_url' in people and people['function_restful_url']:
@@ -104,19 +144,16 @@ class MoviepilotAgent(Agent.Movies):
 
     metadata.directors.clear()
     directors = list(set(directors)) # Remove duplicates
-    directors.sort()
     for director in directors:
       metadata.directors.add(director)
 
     metadata.writers.clear()
     writers = list(set(writers)) # Remove duplicates
-    writers.sort()
     for writer in writers:
       metadata.writers.add(writer)
 
     metadata.roles.clear()
     actors = list(set(actors)) # Remove duplicates
-    actors.sort()
     for actor in actors:
       role = metadata.roles.new()
       role.role = actor.split('|')[1]
@@ -297,14 +334,7 @@ class Summary(object):
         cast = JSON.ObjectFromURL(MP_CAST_INFO % (self.metadata_id))
         for people in cast['movies_people']:
           if people['person']['restful_url'].find(name) != -1:
-            # First or last name *can* be missing
-            if 'first_name' in people['person'] and people['person']['first_name']:
-              first_name = people['person']['first_name']
-
-            if 'last_name' in people['person'] and people['person']['last_name']:
-              last_name = people['person']['last_name']
-
-            full_name = ' '.join([first_name, last_name]).strip()
+            full_name = get_full_name(people)
             break
       except:
         pass
