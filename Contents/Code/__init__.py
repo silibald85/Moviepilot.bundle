@@ -63,6 +63,12 @@ def get_full_name(people):
   return ' '.join([first_name, last_name]).strip()
 
 
+def dedupe(seq):
+  noDupes = []
+  [noDupes.append(i) for i in seq if not noDupes.count(i)]
+  return noDupes
+
+
 class MoviepilotAgent(Agent.Movies):
   name = 'Moviepilot'
   languages = ['de']
@@ -143,17 +149,17 @@ class MoviepilotAgent(Agent.Movies):
         actors.append('|'.join([full_name, character]))
 
     metadata.directors.clear()
-    directors = list(set(directors)) # Remove duplicates
+    directors = dedupe(directors)
     for director in directors:
       metadata.directors.add(director)
 
     metadata.writers.clear()
-    writers = list(set(writers)) # Remove duplicates
+    writers = dedupe(writers)
     for writer in writers:
       metadata.writers.add(writer)
 
     metadata.roles.clear()
-    actors = list(set(actors)) # Remove duplicates
+    actors = dedupe(actors)
     for actor in actors:
       role = metadata.roles.new()
       role.role = actor.split('|')[1]
