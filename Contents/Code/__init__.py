@@ -113,10 +113,7 @@ class MoviepilotAgent(Agent.Movies):
     summary = String.StripTags(summary) # Strip HTML tags
     summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', summary) # Strip asterisks from movie titles
     summary = re.sub('(\r)?\n((\r)?\n)+', '\n\n', summary).strip() # Replace 2+ newlines with 2 newlines
-
-    if summary.find('\n\nHandlung') != -1:
-      summary = summary.split('\n\nHandlung')[0].strip()
-
+    summary = re.split('\n\n(Handlung|Inhalt|Vorschau|Hintergrund|Wissenswertes|Hintergründe|Weitere Information im Internet|Web-Quellen)', summary, 1, re.IGNORECASE)[0].strip()
     metadata.summary = summary
 
     metadata.rating = float( movie['average_community_rating'] )/10 # Convert score of 0-100 to 0-10
