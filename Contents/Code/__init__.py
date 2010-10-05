@@ -15,7 +15,9 @@ TMDB_API_KEY = '3ee878f19cf07186c8dc4111fb37b4a6'
 TMDB_GETINFO_IMDB = 'http://api.themoviedb.org/2.1/Movie.imdbLookup/de/json/%s/%%s' % (TMDB_API_KEY)
 
 # Google
-GOOGLE_JSON_URL = 'http://ajax.googleapis.com/ajax/services/search/web?v=1.0&rsz=large&q=allintitle:%%22%s%%22+Film+site:moviepilot.de%%2Fmovies'
+GOOGLE_SEARCH_URL = 'http://ajax.googleapis.com/ajax/services/search/web?v=1.0&rsz=large&q=allintitle:%%22%s%%22+Film+site:moviepilot.de%%2Fmovies'
+GOOGLE_TRANSLATE_URL = 'http://ajax.googleapis.com/ajax/services/language/translate?v=1.0&q=%s&langpair=en|de'
+
 
 def Start():
   HTTP.CacheTime = CACHE_1DAY
@@ -81,7 +83,7 @@ class MoviepilotAgent(Agent.Movies):
 
 
   def search_moviepilot(self, title):
-    searchResult = JSON.ObjectFromURL(MP_SEARCH_MOVIES % (String.Quote(title.encode('utf-8'), usePlus=True)))
+    searchResult = JSON.ObjectFromURL(MP_SEARCH_MOVIES % (String.Quote(title, usePlus=True)))
 
     if 'movies' in searchResult:
       return searchResult['movies']
@@ -176,11 +178,29 @@ class MoviepilotAgent(Agent.Movies):
     except:
       pass
 
-    # Get backdrops and (more) posters from TMDB if we know the IMDB id
+    # Get additional info from TMDB (if we know the IMDB id)
     if 'alternative_identifiers' in movie and 'imdb' in movie['alternative_identifiers']:
       imdbId = movie['alternative_identifiers']['imdb']
       imdbId = ''.join(['tt', imdbId.zfill(7)])
       tmdb_dict = JSON.ObjectFromURL(TMDB_GETINFO_IMDB % (imdbId))[0]
+
+      # Posters
+      if 'posters' in tmdb_dict:
+        for p in tmdb_dict['posters']:
+          if p['image']['size'] == 'original':
+            p_i += 1 # Variable p_i already initiated when trying to retrieve poster from Moviepilot
+            if p['image']['url'] not in metadata.posters:
+              p_id = p['image']['id']
+
+              # Find a thumbnail
+              for t in tmdb_dict['posters']:
+                if t['image']['id'] == p_id and t['image']['size'] == 'mid':
+                  thumb = HTTP.Request(t['image']['url'], cacheTime=CACHE_1WEEK)
+                  break
+              try:
+                metadata.posters[p['image']['url']] = Proxy.Preview(thumb, sort_order = p_i)
+              except:
+                pass
 
       # Backdrops
       if 'backdrops' in tmdb_dict:
@@ -201,23 +221,30 @@ class MoviepilotAgent(Agent.Movies):
               except:
                 pass
 
-      # Posters
-      if 'posters' in tmdb_dict:
-        for p in tmdb_dict['posters']:
-          if p['image']['size'] == 'original':
-            p_i += 1 # Variable p_i already initiated when trying to retrieve poster from Moviepilot
-            if p['image']['url'] not in metadata.posters:
-              p_id = p['image']['id']
+      # Rating
+      metadata.rating = None
+      if 'rating' in tmdb_dict:
+        metadata.rating = float(tmdb_dict['rating'])
 
-              # Find a thumbnail
-              for t in tmdb_dict['posters']:
-                if t['image']['id'] == p_id and t['image']['size'] == 'mid':
-                  thumb = HTTP.Request(t['image']['url'], cacheTime=CACHE_1WEEK)
-                  break
-              try:
-                metadata.posters[p['image']['url']] = Proxy.Preview(thumb, sort_order = p_i)
-              except:
-                pass
+      # MPAA film rating (the only certification idicator available at the moment)
+      metadata.content_rating = None
+      if 'certification' in tmdb_dict:
+        metadata.content_rating = tmdb_dict['certification']
+
+      # Genres (overwrite the ones from Moviepilot if TMDB has the info)
+      if 'genres' in tmdb_dict:
+        metadata.genres.clear()
+
+        for g in tmdb_dict['genres']:
+          genre = g['name']
+          if genre[-4:] == 'film' and not genre.lower() == 'dokumentarfilm':
+            genre = genre[:-4]
+          metadata.genres.add( self.translate(genre) )
+
+      # Original title
+      metadata.original_title = None
+      if 'original_name' in tmdb_dict:
+        metadata.original_title = unescape(tmdb_dict['original_name'])
 
 
   def parseSearchResult(self, results, media, lang, searchResult):
@@ -228,7 +255,7 @@ class MoviepilotAgent(Agent.Movies):
       for movie in searchResult:
         if movie['restful_url'] and movie['display_title']:
           id = movie['restful_url'].rsplit('/',1)[1]
-          title = movie['display_title'].replace('&#38;', '&')
+          title = unescape( movie['display_title'].replace('&#38;', '&').replace('&amp;', '&') )
           year = None
           if movie['production_year'] and str(movie['production_year']).strip() != '':
             year = int(movie['production_year'])
@@ -243,7 +270,7 @@ class MoviepilotAgent(Agent.Movies):
     score = 110 # Google title searches are more accurate, give those a higher score
     try:
       time.sleep(0.5)
-      searchResult = JSON.ObjectFromURL(GOOGLE_JSON_URL % (String.Quote(media.name, usePlus=True)))
+      searchResult = JSON.ObjectFromURL(GOOGLE_SEARCH_URL % (String.Quote(media.name, usePlus=True)))
     except:
       Log('Error while retrieving data from Google.')
       searchResult = None
@@ -253,6 +280,7 @@ class MoviepilotAgent(Agent.Movies):
         title = movie['titleNoFormatting']
         if title.find('| Film') != -1:
           title = title.split('| Film',1)[0].strip()
+          title = unescape( title.replace('&#38;', '&').replace('&amp;', '&') )
           id = re.search('\/movies\/([^/]+)', movie['unescapedUrl']).group(1)
           try:
             year = re.search('\(.*([0-9]{4}).*\)', movie['content']).group(1)
@@ -324,6 +352,15 @@ class MoviepilotAgent(Agent.Movies):
       scorePenalty += -25
 
     return scorePenalty
+
+
+  def translate(self, q, camelize=True):
+    translated = JSON.ObjectFromURL(GOOGLE_TRANSLATE_URL % (String.Quote(q.lower(), usePlus=True)))
+    if translated and translated['responseStatus'] == 200:
+      t = translated['responseData']['translatedText']
+    if camelize:
+      return t.title()
+    return t
 
 
 class Summary(object):
