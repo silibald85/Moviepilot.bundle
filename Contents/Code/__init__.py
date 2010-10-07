@@ -9,6 +9,7 @@ MP_API_KEY = '734xthw33clipcnv6nqdtnq3em3rmj'
 MP_SEARCH_MOVIES = '%s/searches/movies.json?q=%%s&api_key=%s' % (MP_BASE_URL, MP_API_KEY)
 MP_MOVIE_INFO = '%s/movies/%%s.json?api_key=%s' % (MP_BASE_URL, MP_API_KEY)
 MP_CAST_INFO = '%s/movies/%%s/casts.json?api_key=%s' % (MP_BASE_URL, MP_API_KEY)
+MP_SPLIT_SUMMARY = ['Handlung', 'Hintergrund', 'Hintergründe', 'Inhalt', 'Interessantes', 'Quellen', 'Vorschau', 'Web-Quellen', 'Weitere Information', 'Wissenswertes']
 
 # TMDB
 TMDB_API_KEY = '3ee878f19cf07186c8dc4111fb37b4a6'
@@ -113,7 +114,7 @@ class MoviepilotAgent(Agent.Movies):
     summary = String.StripTags(summary) # Strip HTML tags
     summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', summary) # Strip asterisks from movie titles
     summary = re.sub('(\r)?\n((\r)?\n)+', '\n\n', summary).strip() # Replace 2+ newlines with 2 newlines
-    summary = re.split('\n\n(Handlung|Inhalt|Vorschau|Hintergrund|Wissenswertes|Hintergründe|Weitere Information im Internet|Web-Quellen)', summary, re.IGNORECASE)[0].strip()
+    summary = re.split('\n\n(' + '|'.join(MP_SPLIT_SUMMARY) + ')', summary, re.IGNORECASE)[0].strip()
     metadata.summary = summary
 
     metadata.rating = float( movie['average_community_rating'] )/10 # Convert score of 0-100 to 0-10
@@ -233,10 +234,13 @@ class MoviepilotAgent(Agent.Movies):
         metadata.genres.clear()
 
         for g in tmdb_dict['genres']:
-          genre = g['name']
-          if genre[-4:] == 'film' and not genre.lower() == 'dokumentarfilm':
-            genre = genre[:-4]
-          metadata.genres.add( self.translate(genre) )
+          genre = self.translate(g['name'])
+          if genre[-5:] == '-Film' or genre[-5:] == ' Film':
+            genre = genre[:-5]
+          elif genre[-6:] == '-Movie' or genre[-6:] == ' Movie':
+            genre = genre[:-6]
+          Log('TRANSLATED: ' + g['name'] + ' ==> ' + genre)
+          metadata.genres.add( genre )
 
       # Original title
       metadata.original_title = None
@@ -352,6 +356,7 @@ class MoviepilotAgent(Agent.Movies):
 
 
   def translate(self, q, camelize=True):
+    q = q + ' movie'
     translated = JSON.ObjectFromURL(GOOGLE_TRANSLATE_URL % (String.Quote(q.lower(), usePlus=True)))
     if translated and translated['responseStatus'] == 200:
       t = translated['responseData']['translatedText']
