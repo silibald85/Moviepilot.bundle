@@ -234,6 +234,8 @@ class MoviepilotAgent(Agent.Movies):
         metadata.genres.clear()
 
         for g in tmdb_dict['genres']:
+          genre = g['name']
+
 #          genre = self.translate(g['name'])
 #          if genre[-5:] == '-Film' or genre[-5:] == ' Film':
 #            genre = genre[:-5]
