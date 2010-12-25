@@ -1,7 +1,7 @@
 # Moviepilot metadata agent for Plex
 # Adds German titles, summaries and posters from www.moviepilot.de to movies
 
-import re
+import htmlentitydefs, re
 
 BASE_URL            = 'http://www.moviepilot.de'
 API_KEY             = '734xthw33clipcnv6nqdtnq3em3rmj'
