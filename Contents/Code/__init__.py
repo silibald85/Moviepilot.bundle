@@ -54,36 +54,44 @@ class MoviepilotAgent(Agent.Movies):
     results.Append(MetadataSearchResult(id=media.primary_metadata.id.lstrip('t0'), score=100))
 
   def update(self, metadata, media, lang):
-    try:
-      movie = JSON.ObjectFromURL(MOVIE_INFO_BY_IMDB % (metadata.id))
-
-      title = movie['display_title'].replace('&#38;', '&').replace('&amp;', '&')
-      metadata.title = unescape(title)
-
-      if movie['production_year'] and str(movie['production_year']).strip() != '':
-        metadata.year = int(movie['production_year'])
-
-      summary = movie['short_description']
-      summary = re.split('(\r)?\n((\r)?\n)+', summary, 1)[0].strip() # Split after paragraphs, keep the first paragraph only
-
-      summary_obj = Summary(metadata.id)                             # Create an instance of the callable class Summary and make the metadata.id available in it
-      summary = re.sub('\[\[(.+?)\]\]', summary_obj, summary)        # Replace linked movie titles and names with full title or name
-      summary = summary.replace('&#38;', '&').replace('&amp;', '&')
-      summary = unescape(summary)
-      summary = String.StripTags(summary)                            # Strip HTML tags
-      summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', summary)       # Strip asterisks from movie titles
-      metadata.summary = summary
-
-      # Get the poster from Moviepilot if it is available
+    # Only use data from Moviepilot if the user has set the language for this section to German (Deutsch)
+    if lang == 'de':
       try:
-        poster_url = ''.join([movie['poster']['base_url'], movie['poster']['photo_id'], '/', movie['poster']['file_name_base'], '.', movie['poster']['extension']])
-        if poster_url not in metadata.posters:
-          img = HTTP.Request(poster_url)
-          metadata.posters[poster_url] = Proxy.Preview(img)
+        movie = JSON.ObjectFromURL(MOVIE_INFO_BY_IMDB % (metadata.id))
+
+        title = movie['display_title'].replace('&#38;', '&').replace('&amp;', '&')
+        metadata.title = unescape(title)
+
+        if movie['production_year'] and str(movie['production_year']).strip() != '':
+          metadata.year = int(movie['production_year'])
+
+        summary = movie['short_description']
+        summary = re.split('(\r)?\n((\r)?\n)+', summary, 1)[0].strip() # Split after paragraphs, keep the first paragraph only
+
+        summary_obj = Summary(metadata.id)                             # Create an instance of the callable class Summary and make the metadata.id available in it
+        summary = re.sub('\[\[(.+?)\]\]', summary_obj, summary)        # Replace linked movie titles and names with full title or name
+        summary = summary.replace('&#38;', '&').replace('&amp;', '&')
+        summary = unescape(summary)
+        summary = String.StripTags(summary)                            # Strip HTML tags
+        summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', summary)       # Strip asterisks from movie titles
+        metadata.summary = summary
+
+        # Get the poster from Moviepilot if it is available
+        try:
+          poster_url = ''.join([movie['poster']['base_url'], movie['poster']['photo_id'], '/', movie['poster']['file_name_base'], '.', movie['poster']['extension']])
+          if poster_url not in metadata.posters:
+            img = HTTP.Request(poster_url)
+            metadata.posters[poster_url] = Proxy.Preview(img)
+        except:
+          pass
       except:
         pass
-    except:
-      pass
+    else:
+      # Clear out current values so other agents can fill them in
+      metadata.title = ''
+      metadata.year = None
+      metadata.summary = ''
+      metadata.posters.validate_keys([])
 
 
 class Summary(object):
