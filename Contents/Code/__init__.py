@@ -59,6 +59,7 @@ class MoviepilotAgent(Agent.Movies):
       try:
         movie = JSON.ObjectFromURL(MOVIE_INFO_BY_IMDB % (metadata.id))
 
+        metadata.title = ''
         if Prefs['title']:
           title = movie['display_title'].replace('&#38;', '&').replace('&amp;', '&')
           metadata.title = unescape(title)
@@ -66,6 +67,7 @@ class MoviepilotAgent(Agent.Movies):
         if movie['production_year'] and str(movie['production_year']).strip() != '':
           metadata.year = int(movie['production_year'])
 
+        metadata.summary = ''
         if Prefs['summary']:
           summary = movie['short_description']
           summary = re.split('(\r)?\n((\r)?\n)+', summary, 1)[0].strip() # Split after paragraphs, keep the first paragraph only
@@ -78,23 +80,24 @@ class MoviepilotAgent(Agent.Movies):
           summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', summary)       # Strip asterisks from movie titles
           metadata.summary = summary
 
-        if Prefs['poster']:
-          # Get the poster from Moviepilot if it is available
-          try:
-            poster_url = ''.join([movie['poster']['base_url'], movie['poster']['photo_id'], '/', movie['poster']['file_name_base'], '.', movie['poster']['extension']])
-            if poster_url not in metadata.posters:
-              img = HTTP.Request(poster_url)
-              metadata.posters[poster_url] = Proxy.Preview(img)
-          except:
-            pass
+        # Get the poster from Moviepilot if it is available
+        try:
+          poster_url = ''.join([movie['poster']['base_url'], movie['poster']['photo_id'], '/', movie['poster']['file_name_base'], '.', movie['poster']['extension']])
+        except:
+          poster_url = None
+
+        if poster_url is not None:
+          if Prefs['poster']:
+            try:
+              if poster_url not in metadata.posters:
+                img = HTTP.Request(poster_url)
+                metadata.posters[poster_url] = Proxy.Preview(img)
+            except:
+              pass
+          else:
+            del metadata.posters[poster_url]
       except:
         pass
-    else:
-      # Clear out current values so other agents can fill them in
-      metadata.title = ''
-      metadata.year = None
-      metadata.summary = ''
-      metadata.posters.validate_keys([])
 
 
 class Summary(object):
