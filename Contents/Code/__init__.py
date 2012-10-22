@@ -3,11 +3,12 @@
 
 import htmlentitydefs, re
 
-BASE_URL            = 'http://www.moviepilot.de'
-API_KEY             = '734xthw33clipcnv6nqdtnq3em3rmj'
+BASE_URL = 'http://www.moviepilot.de'
+API_KEY = '734xthw33clipcnv6nqdtnq3em3rmj'
 MOVIE_INFO_BY_IMDB  = '%s/movies/imdb-id-%%s.json?api_key=%s' % (BASE_URL, API_KEY)
 MOVIE_INFO_BY_TITLE = '%s/movies/%%s.json?api_key=%s' % (BASE_URL, API_KEY)
-CAST_INFO_BY_IMDB   = '%s/movies/imdb-id-%%s/casts.json?api_key=%s' % (BASE_URL, API_KEY)
+CAST_INFO_BY_IMDB = '%s/movies/imdb-id-%%s/casts.json?api_key=%s' % (BASE_URL, API_KEY)
+INFO_BY_IMDB = 'http://www.moviepilot.de/movies/imdb-id-%s'
 
 def Start():
   HTTP.CacheTime = CACHE_1DAY
@@ -96,6 +97,26 @@ class MoviepilotAgent(Agent.Movies):
               pass
           else:
             del metadata.posters[poster_url]
+
+        try:
+          movie = HTML.ElementFromURL(INFO_BY_IMDB % (metadata.id), sleep=3.0, cacheTime=CACHE_1DAY*365, headers={'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:15.0) Gecko/20100101 Firefox/15.0.1'})
+
+          # FSK
+          fsk_text = movie.xpath('//h2//span[contains(text(), "FSK ")]')[0].text
+          fsk = re.search('FSK (0|6|12|16|18)', fsk_text)
+
+          if fsk:
+            metadata.content_rating = 'de/%s' % fsk.group(1)
+
+          # Original title
+          original_title_text = movie.xpath('//h2/span')[0].text.rsplit('(',1)[0].strip()
+
+          if original_title_text != title:
+            metadata.original_title = original_title_text
+
+        except:
+          pass
+
       except:
         pass
 
