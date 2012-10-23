@@ -64,6 +64,8 @@ class MoviepilotAgent(Agent.Movies):
         if Prefs['title']:
           title = movie['display_title'].replace('&#38;', '&').replace('&amp;', '&')
           metadata.title = unescape(title)
+        else:
+          title = None
 
         if movie['production_year'] and str(movie['production_year']).strip() != '':
           metadata.year = int(movie['production_year'])
@@ -111,7 +113,7 @@ class MoviepilotAgent(Agent.Movies):
           # Original title
           original_title_text = movie.xpath('//h2/span')[0].text.rsplit('(',1)[0].strip()
 
-          if original_title_text != title:
+          if title is not None and original_title_text != title:
             metadata.original_title = original_title_text
 
         except:
