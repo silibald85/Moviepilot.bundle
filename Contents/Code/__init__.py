@@ -1,7 +1,7 @@
 # Moviepilot metadata agent for Plex
 # Adds German titles, summaries and posters from www.moviepilot.de to movies
 
-import htmlentitydefs, re
+import re
 
 BASE_URL = 'http://www.moviepilot.de'
 API_KEY = '734xthw33clipcnv6nqdtnq3em3rmj'
@@ -11,37 +11,8 @@ CAST_INFO_BY_IMDB = '%s/movies/imdb-id-%%s/casts.json?api_key=%s' % (BASE_URL, A
 INFO_BY_IMDB = 'http://www.moviepilot.de/movies/imdb-id-%s'
 
 def Start():
-  HTTP.CacheTime = CACHE_1DAY
+  HTTP.CacheTime = CACHE_1WEEK
   HTTP.Headers['User-Agent'] = 'Plex/Nine'
-
-
-##
-# Removes HTML or XML character references and entities from a text string.
-# http://effbot.org/zone/re-sub.htm#unescape-html
-#
-# @param text The HTML (or XML) source text.
-# @return The plain text, as a Unicode string, if necessary.
-
-def unescape(text):
-  def fixup(m):
-    text = m.group(0)
-    if text[:2] == "&#":
-      # character reference
-      try:
-        if text[:3] == "&#x":
-          return unichr(int(text[3:-1], 16))
-        else:
-          return unichr(int(text[2:-1]))
-      except ValueError:
-        pass
-    else:
-      # named entity
-      try:
-        text = unichr(htmlentitydefs.name2codepoint[text[1:-1]])
-      except KeyError:
-        pass
-    return text # leave as is
-  return re.sub("&#?\w+;", fixup, text)
 
 
 class MoviepilotAgent(Agent.Movies):
@@ -52,7 +23,10 @@ class MoviepilotAgent(Agent.Movies):
 
   def search(self, results, media, lang):
     # Use the IMDB id found by the primary metadata agent (IMDB/Freebase)
-    results.Append(MetadataSearchResult(id=media.primary_metadata.id.lstrip('t0'), score=100))
+    results.Append(MetadataSearchResult(
+      id = media.primary_metadata.id.lstrip('t0'),
+      score = 100
+    ))
 
   def update(self, metadata, media, lang):
     # Only use data from Moviepilot if the user has set the language for this section to German (Deutsch)
@@ -63,7 +37,7 @@ class MoviepilotAgent(Agent.Movies):
         metadata.title = ''
         if Prefs['title']:
           title = movie['display_title'].replace('&#38;', '&').replace('&amp;', '&')
-          metadata.title = unescape(title)
+          metadata.title = String.DecodeHTMLEntities(title)
         else:
           title = None
 
@@ -78,7 +52,7 @@ class MoviepilotAgent(Agent.Movies):
           summary_obj = Summary(metadata.id)                             # Create an instance of the callable class Summary and make the metadata.id available in it
           summary = re.sub('\[\[(.+?)\]\]', summary_obj, summary)        # Replace linked movie titles and names with full title or name
           summary = summary.replace('&#38;', '&').replace('&amp;', '&')
-          summary = unescape(summary)
+          summary = String.DecodeHTMLEntities(summary)
           summary = String.StripTags(summary)                            # Strip HTML tags
           summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', summary)       # Strip asterisks from movie titles
           metadata.summary = summary
@@ -133,12 +107,15 @@ class Summary(object):
 
     if type == 's':
       full_name = ''
+
       try:
         cast = JSON.ObjectFromURL(CAST_INFO_BY_IMDB % (self.metadata_id))
         for people in cast['movies_people']:
+
           if people['person']['restful_url'].find(name) != -1:
             # First or last name item can be empty or missing
             first_name = ''
+
             if 'first_name' in people['person'] and people['person']['first_name']:
               first_name = people['person']['first_name']
 
@@ -152,12 +129,16 @@ class Summary(object):
             continue
       except:
         pass
+
       return full_name
+
     elif type == 'm':
       title = ''
+
       try:
         movie = JSON.ObjectFromURL(MOVIE_INFO_BY_TITLE % (name))
         title = movie['display_title']
       except:
         pass
+
       return title
