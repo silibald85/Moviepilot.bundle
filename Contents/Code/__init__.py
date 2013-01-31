@@ -1,14 +1,18 @@
 # Moviepilot metadata agent for Plex
 # Adds German titles, summaries and posters from www.moviepilot.de to movies
 
-import re
-
 BASE_URL = 'http://www.moviepilot.de'
 API_KEY = '734xthw33clipcnv6nqdtnq3em3rmj'
 MOVIE_INFO_BY_IMDB  = '%s/movies/imdb-id-%%s.json?api_key=%s' % (BASE_URL, API_KEY)
 MOVIE_INFO_BY_TITLE = '%s/movies/%%s.json?api_key=%s' % (BASE_URL, API_KEY)
 CAST_INFO_BY_IMDB = '%s/movies/imdb-id-%%s/casts.json?api_key=%s' % (BASE_URL, API_KEY)
 INFO_BY_IMDB = 'http://www.moviepilot.de/movies/imdb-id-%s'
+
+RE_SPLIT_SUMMARY = Regex('(\r)?\n((\r)?\n)+')
+RE_REPLACE_LINKS = Regex('\[\[(.+?)\]\]')
+RE_ASTERIKS = Regex(r'\*([^\s].+?[^\s])\*')
+RE_FSK = Regex('FSK (0|6|12|16|18)')
+
 
 def Start():
   HTTP.CacheTime = CACHE_1WEEK
@@ -47,14 +51,14 @@ class MoviepilotAgent(Agent.Movies):
         metadata.summary = ''
         if Prefs['summary']:
           summary = movie['short_description']
-          summary = re.split('(\r)?\n((\r)?\n)+', summary, 1)[0].strip() # Split after paragraphs, keep the first paragraph only
+          summary = RE_SPLIT_SUMMARY.split(summary, 1)[0].strip()        # Split after paragraphs, keep the first paragraph only
 
           summary_obj = Summary(metadata.id)                             # Create an instance of the callable class Summary and make the metadata.id available in it
-          summary = re.sub('\[\[(.+?)\]\]', summary_obj, summary)        # Replace linked movie titles and names with full title or name
+          summary = RE_REPLACE_LINKS.sub(summary_obj, summary)           # Replace linked movie titles and names with full title or name
           summary = summary.replace('&#38;', '&').replace('&amp;', '&')
           summary = String.DecodeHTMLEntities(summary)
           summary = String.StripTags(summary)                            # Strip HTML tags
-          summary = re.sub(r'\*([^\s].+?[^\s])\*', r'\1', summary)       # Strip asterisks from movie titles
+          summary = RE_ASTERIKS.sub(r'\1', summary)                      # Strip asterisks from movie titles
           metadata.summary = summary
 
         # Get the poster from Moviepilot if it is available
@@ -79,7 +83,7 @@ class MoviepilotAgent(Agent.Movies):
 
           # FSK
           fsk_text = movie.xpath('//h2//span[contains(text(), "FSK ")]')[0].text
-          fsk = re.search('FSK (0|6|12|16|18)', fsk_text)
+          fsk = RE_FSK.search(fsk_text)
 
           if fsk:
             metadata.content_rating = 'de/%s' % fsk.group(1)
