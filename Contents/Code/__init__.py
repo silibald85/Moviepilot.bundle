@@ -31,7 +31,7 @@ class MoviepilotAgent(Agent.Movies):
 		# Use data from Moviepilot only if the user has set the language for this section to German
 		if lang == Locale.Language.German:
 			try:
-				html = HTML.ElementFromURL(MOVIE_URL % metadata.id)
+				html = HTML.ElementFromURL(MOVIE_URL % metadata.id, sleep=1.0)
 			except:
 				Log('Error fetching page for %s' % metadata.id)
 
@@ -46,21 +46,14 @@ class MoviepilotAgent(Agent.Movies):
 					metadata.original_title = original_title
 
 				# Summary
-				keep_paragraphs = []
 				paragraphs = html.xpath('//div[@itemprop="description"]/p|//div[@itemprop="description"]/div/p')
 
 				for p in paragraphs:
-					if len(p.xpath('./strong')) > 0:
+					if len(p.xpath('./strong|./b')) > 0 and len(p.xpath('./text()')) == 0:
+						continue
+					break
 
-						if len(p.xpath('./text()')) == 0:
-							continue
-
-						if p.xpath('./strong/text()')[0].startswith('Hintergrund'):
-							break
-
-					keep_paragraphs.append(String.StripTags(p.text_content().strip()))
-
-				metadata.summary = '\n\n'.join(keep_paragraphs)
+				metadata.summary = String.StripTags(p.text_content()).strip()
 
 				# Poster
 				poster = html.xpath('//div[@class="poster"]/@style')
