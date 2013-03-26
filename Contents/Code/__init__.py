@@ -31,9 +31,13 @@ class MoviepilotAgent(Agent.Movies):
 		# Use data from Moviepilot only if the user has set the language for this section to German
 		if lang == Locale.Language.German:
 			try:
-				html = HTML.ElementFromURL(MOVIE_URL % metadata.id, sleep=1.0)
-			except:
-				Log('Error fetching page for %s' % metadata.id)
+				html = HTML.ElementFromURL(MOVIE_URL % metadata.id, sleep=1.0, follow_redirects=False)
+			except Ex.RedirectError, e:
+				if 'Location' in e.headers and not e.headers['Location'].endswith('moviepilot.de/'):
+					html = HTML.ElementFromURL(e.headers['Location'], sleep=1.0)
+				else:
+					Log('"%s" not available on Moviepilot' % media.title)
+					html = None
 
 			if html:
 				# Title
